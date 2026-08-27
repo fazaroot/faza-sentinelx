@@ -21,4 +21,5 @@ node_modules/
 *.swp
 
 # Log
-*.log
+*.logses.txt
+*.session
