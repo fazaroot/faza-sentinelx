@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel Edge WAF — Dashboard</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<style>
+  :root{--void:#05070d;--glass:rgba(255,255,255,.045);--glass-brd:rgba(255,255,255,.09);--cyan:#22ccd6;--amber:#f5a524;--red:#ef5b5b;--text:#e7ecf6;--muted:#8b96ab;}
+  *{box-sizing:border-box}
+  body{background:radial-gradient(1100px 600px at 85% -10%,rgba(44,232,209,.10),transparent 60%),var(--void);color:var(--text);font-family:Inter,sans-serif;min-height:100vh;max-width:64rem;margin:0 auto;padding:2rem 1.25rem}
+  .glass{background:var(--glass);border:1px solid var(--glass-brd);backdrop-filter:blur(18px);border-radius:18px;overflow:hidden;position:relative}
+  .glass::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,rgba(34,204,214,.35),transparent);opacity:.7}
+  input,select,textarea{outline:none}
+</style>
+</head>
+<body>
+  <header class="flex items-center justify-between mb-8">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#22ccd6] to-[#0e7c72] flex items-center justify-center">
+        <span class="text-[#05070d] font-bold">S</span>
+      </div>
+      <div>
+        <p class="font-bold tracking-wide">SENTINEL <span class="text-[#22ccd6]">EDGE</span></p>
+        <p class="text-[10px] text-[var(--muted)] font-mono tracking-widest">VERCEL EDGE FIREWALL · WAF L7 + RATE LIMIT</p>
+      </div>
+    </div>
+    <label class="text-xs text-[var(--muted)] flex items-center gap-2">
+      Admin token
+      <input id="token" value="sentin-demo" class="bg-white/5 border border-white/10 rounded-lg px-2 py-1 font-mono text-xs" placeholder="token">
+    </label>
+  </header>
+
+  <section class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+    <div class="glass p-5 md:col-span-2">
+      <p class="text-xs text-[var(--muted)] font-mono mb-3">// KONFIGURASI WAF</p>
+      <div id="cfg" class="font-mono text-xs text-[var(--muted)] space-y-1">memuat…</div>
+    </div>
+    <div class="glass p-5">
+      <p class="text-xs text-[var(--muted)] font-mono mb-3">// RATE LIMIT</p>
+      <div id="rate" class="font-mono text-xs text-[var(--muted)]">–</div>
+    </div>
+  </section>
+
+  <section class="glass p-5 mb-8">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold">Payload Scanner</h2>
+      <button id="scanBtn" class="text-sm font-semibold bg-[#22ccd6] text-[#05070d] px-4 py-1.5 rounded-lg hover:brightness-110">Pindai</button>
+    </div>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <select id="pMethod" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm">
+        <option>GET</option><option>POST</option><option>OPTIONS</option>
+      </select>
+      <input id="pPath" value="/login?user=admin" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono">
+      <input id="pUa" value="Mozilla/5.0" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm">
+      <textarea id="pBody" rows="2" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono" placeholder="body (opsional)"></textarea>
+    </div>
+    <div id="scanResult" class="mt-4"></div>
+  </section>
+
+  <section class="glass p-5">
+    <div class="flex items-center justify-between mb-3">
+      <h2 class="font-semibold">Preset Pengujian</h2>
+      <span class="text-xs text-[var(--muted)] font-mono">isi scanner otomatis</span>
+    </div>
+    <div id="presets" class="flex flex-wrap gap-2"></div>
+  </section>
+<script type="module" src="./dash.mjs"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+# Build
+build/
+*.o
+*.obj
+
+# Vercel local
+.vercel/
+.vercelenv
+node_modules/
+
+# Env & secrets (JANGAN pernah commit token/key)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Log
+*.log

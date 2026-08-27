@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sentinel Firewall — Dashboard Kontrol Lalu Lintas Jaringan</title>
+<meta name="description" content="Dashboard kontrol firewall userland real-time: pantau lalu lintas, kelola rule, dan lihat log blokir dalam satu panel.">
+<meta name="keywords" content="firewall dashboard, network security, nfqueue, packet filter, ubuntu firewall">
+<meta property="og:title" content="Sentinel Firewall — Dashboard">
+<meta property="og:description" content="Panel kontrol firewall userland: traffic real-time, rule management, live log.">
+<meta property="og:type" content="website">
+<meta name="robots" content="index, follow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Tailwind Play CDN (JIT runtime): dibutuhkan karena dashboard memakai
+     arbitrary values (bg-[#05070d]/80, text-[var(--muted)], dll) yang tidak
+     tersedia sebagai CSS prebuilt. File "tailwind.min.js" di cdnjs TIDAK ADA,
+     jadi jangan kembali ke sana. -->
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/sweetalert2/11.10.1/sweetalert2.all.min.js"></script>
+<style>
+  :root{
+    --void:#05070d;
+    --panel:#0b0f1a;
+    --glass:rgba(255,255,255,0.045);
+    --glass-brd:rgba(255,255,255,0.09);
+    --cyan:#2ce8d1;
+    --cyan-dim:rgba(44,232,209,0.35);
+    --amber:#f5a524;
+    --red:#ef5b5b;
+    --text:#e7ecf6;
+    --muted:#8b96ab;
+  }
+  *{box-sizing:border-box;}
+  body{
+    background:
+      radial-gradient(1100px 600px at 85% -10%, rgba(44,232,209,0.10), transparent 60%),
+      radial-gradient(900px 500px at -10% 110%, rgba(245,165,36,0.07), transparent 60%),
+      var(--void);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+  }
+  .font-display{font-family:'Space Grotesk',sans-serif;}
+  .font-mono{font-family:'JetBrains Mono',monospace;}
+
+  .glass{
+    background:var(--glass);
+    border:1px solid var(--glass-brd);
+    backdrop-filter:blur(18px);
+    -webkit-backdrop-filter:blur(18px);
+    position:relative;
+    border-radius:18px;
+    overflow:hidden;
+  }
+  .glass::before{
+    content:'';
+    position:absolute;top:0;left:0;right:0;height:1px;
+    background:linear-gradient(90deg, transparent, var(--cyan-dim), transparent);
+    opacity:.7;
+  }
+  .glass:hover{border-color:rgba(44,232,209,0.35); box-shadow:0 0 0 1px rgba(44,232,209,0.08), 0 20px 40px -20px rgba(0,0,0,0.6); transition:all .35s ease;}
+  .glass{transition:all .35s ease;}
+
+  .dot-live{
+    width:8px;height:8px;border-radius:999px;background:var(--cyan);
+    box-shadow:0 0 0 0 rgba(44,232,209,0.6);
+    animation:pulse 2s infinite;
+  }
+  @keyframes pulse{
+    0%{box-shadow:0 0 0 0 rgba(44,232,209,0.55);}
+    70%{box-shadow:0 0 0 9px rgba(44,232,209,0);}
+    100%{box-shadow:0 0 0 0 rgba(44,232,209,0);}
+  }
+  .scan-line{
+    position:absolute; left:0; right:0; height:60px; top:-60px;
+    background:linear-gradient(180deg, rgba(44,232,209,0.15), transparent);
+    animation:scan 4s linear infinite;
+  }
+  @keyframes scan{ 0%{top:-60px;} 100%{top:100%;} }
+
+  ::-webkit-scrollbar{width:8px;height:8px;}
+  ::-webkit-scrollbar-track{background:transparent;}
+  ::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12); border-radius:8px;}
+
+  .log-line{opacity:0; animation:fadeIn .4s forwards;}
+  @keyframes fadeIn{to{opacity:1;}}
+
+  .badge-allow{color:#2ce8d1; background:rgba(44,232,209,0.12); border:1px solid rgba(44,232,209,0.3);}
+  .badge-block{color:#ef5b5b; background:rgba(239,91,91,0.12); border:1px solid rgba(239,91,91,0.3);}
+  .badge-warn{color:#f5a524; background:rgba(245,165,36,0.12); border:1px solid rgba(245,165,36,0.3);}
+
+  .sparkline{width:100%;height:64px;}
+  .cursor-blink{animation:blink 1s step-end infinite;}
+  @keyframes blink{50%{opacity:0;}}
+</style>
+</head>
+<body class="antialiased">
+
+<!-- NAVBAR -->
+<header class="sticky top-0 z-40 border-b border-white/5 bg-[#05070d]/80 backdrop-blur-xl">
+  <div class="max-w-7xl mx-auto px-5 sm:px-8 py-4 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-[#2ce8d1] to-[#0e7c72] flex items-center justify-center shadow-lg shadow-cyan-500/20">
+        <i class="fa-solid fa-shield-halved text-[#05070d] text-sm"></i>
+      </div>
+      <div>
+        <p class="font-display font-semibold text-[15px] leading-none tracking-wide">SENTINEL</p>
+        <p class="text-[10px] text-[var(--muted)] font-mono tracking-widest">USERLAND FIREWALL</p>
+      </div>
+    </div>
+    <nav class="hidden md:flex items-center gap-7 text-sm text-[var(--muted)] font-medium">
+      <a href="#overview" class="hover:text-white transition">Ringkasan</a>
+      <a href="#rules" class="hover:text-white transition">Rule</a>
+      <a href="#logs" class="hover:text-white transition">Log</a>
+    </nav>
+    <div class="flex items-center gap-3">
+      <span class="hidden sm:flex items-center gap-2 text-xs font-mono text-[var(--muted)]">
+        <span class="dot-live"></span> ENGINE AKTIF
+      </span>
+      <button id="btnAddRule" class="font-medium text-sm bg-[#2ce8d1] text-[#05070d] px-4 py-2 rounded-xl hover:brightness-110 transition flex items-center gap-2">
+        <i class="fa-solid fa-plus text-xs"></i> Rule Baru
+      </button>
+    </div>
+  </div>
+</header>
+
+<main class="max-w-7xl mx-auto px-5 sm:px-8 py-8" id="overview">
+
+  <!-- HERO -->
+  <section class="mb-8">
+    <p class="font-mono text-xs text-[var(--cyan)] tracking-widest mb-2">/// PACKET INSPECTION LAYER — NFQUEUE</p>
+    <h1 class="font-display text-3xl sm:text-4xl font-semibold tracking-tight">Setiap paket diperiksa sebelum diizinkan lewat.</h1>
+    <p class="text-[var(--muted)] mt-2 max-w-2xl">Pantau lalu lintas masuk-keluar, kelola rule pemblokiran, dan telusuri log secara real-time dari satu panel.</p>
+  </section>
+
+  <!-- BENTO GRID -->
+  <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+
+    <!-- Traffic chart - spans 2 cols -->
+    <div class="glass p-5 sm:col-span-2 lg:col-span-2 row-span-2">
+      <div class="flex items-center justify-between mb-1">
+        <div>
+          <p class="text-xs text-[var(--muted)] font-mono">TOTAL LALU LINTAS</p>
+          <p class="font-display text-2xl font-semibold mt-1" id="statTraffic">— MB</p>
+        </div>
+        <span class="text-xs px-2 py-1 rounded-lg badge-allow font-mono" id="trafficDelta">+0%</span>
+      </div>
+      <canvas class="sparkline mt-4" id="chartTraffic"></canvas>
+      <p class="text-xs text-[var(--muted)] mt-3">60 detik terakhir · update tiap 2 detik</p>
+    </div>
+
+    <!-- Stat: blocked -->
+    <div class="glass p-5">
+      <div class="flex items-center justify-between">
+        <p class="text-xs text-[var(--muted)] font-mono">DIBLOKIR</p>
+        <i class="fa-solid fa-ban text-[var(--red)] text-sm"></i>
+      </div>
+      <p class="font-display text-3xl font-semibold mt-3" id="statBlocked">0</p>
+      <p class="text-xs text-[var(--muted)] mt-1">percobaan / 24 jam</p>
+    </div>
+
+    <!-- Stat: active rules -->
+    <div class="glass p-5">
+      <div class="flex items-center justify-between">
+        <p class="text-xs text-[var(--muted)] font-mono">RULE AKTIF</p>
+        <i class="fa-solid fa-list-check text-[var(--cyan)] text-sm"></i>
+      </div>
+      <p class="font-display text-3xl font-semibold mt-3" id="statRules">0</p>
+      <p class="text-xs text-[var(--muted)] mt-1">total konfigurasi</p>
+    </div>
+
+    <!-- Stat: connections -->
+    <div class="glass p-5">
+      <div class="flex items-center justify-between">
+        <p class="text-xs text-[var(--muted)] font-mono">KONEKSI AKTIF</p>
+        <i class="fa-solid fa-network-wired text-[var(--amber)] text-sm"></i>
+      </div>
+      <p class="font-display text-3xl font-semibold mt-3" id="statConns">0</p>
+      <p class="text-xs text-[var(--muted)] mt-1">TCP + UDP</p>
+    </div>
+
+    <!-- Stat: latency -->
+    <div class="glass p-5">
+      <div class="flex items-center justify-between">
+        <p class="text-xs text-[var(--muted)] font-mono">LATENSI QUEUE</p>
+        <i class="fa-solid fa-gauge-high text-[var(--cyan)] text-sm"></i>
+      </div>
+      <p class="font-display text-3xl font-semibold mt-3" id="statLatency">0 ms</p>
+      <p class="text-xs text-[var(--muted)] mt-1">rata-rata verdict</p>
+    </div>
+  </section>
+
+  <!-- RULES TABLE -->
+  <section id="rules" class="mt-10">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-display text-xl font-semibold">Rule Firewall</h2>
+      <span class="text-xs text-[var(--muted)] font-mono">Diurutkan dari prioritas tertinggi</span>
+    </div>
+    <div class="glass overflow-x-auto">
+      <table class="w-full text-sm min-w-[640px]">
+        <thead>
+          <tr class="text-left text-[var(--muted)] font-mono text-xs border-b border-white/5">
+            <th class="px-5 py-3 font-medium">TARGET</th>
+            <th class="px-5 py-3 font-medium">PROTOKOL</th>
+            <th class="px-5 py-3 font-medium">PORT</th>
+            <th class="px-5 py-3 font-medium">AKSI</th>
+            <th class="px-5 py-3 font-medium text-right">KONTROL</th>
+          </tr>
+        </thead>
+        <tbody id="rulesBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- LIVE LOG -->
+  <section id="logs" class="mt-10 mb-16">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-display text-xl font-semibold">Log Real-time</h2>
+      <button id="btnClearLog" class="text-xs text-[var(--muted)] hover:text-white font-mono flex items-center gap-1">
+        <i class="fa-solid fa-eraser"></i> bersihkan
+      </button>
+    </div>
+    <div class="glass p-0 relative">
+      <div class="scan-line"></div>
+      <div class="px-5 py-3 border-b border-white/5 flex items-center gap-2 text-xs font-mono text-[var(--muted)]">
+        <span class="w-2.5 h-2.5 rounded-full bg-[#ef5b5b]/60"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-[#f5a524]/60"></span>
+        <span class="w-2.5 h-2.5 rounded-full bg-[#2ce8d1]/60"></span>
+        <span class="ml-2">sentinel@firewall — verdict.log</span>
+      </div>
+      <div id="logBody" class="font-mono text-xs sm:text-[13px] p-5 h-64 overflow-y-auto space-y-1.5"></div>
+    </div>
+  </section>
+
+  <!-- BANNED IPS -->
+  <section id="bans" class="mt-10 mb-16">
+    <div class="flex items-center justify-between mb-4">
+      <h2 class="font-display text-xl font-semibold">IP Di-ban Sementara</h2>
+      <span class="text-xs text-[var(--muted)] font-mono">auto-expire · residivis makin lama dibanned</span>
+    </div>
+    <div class="glass overflow-x-auto">
+      <table class="w-full text-sm min-w-[640px]">
+        <thead>
+          <tr class="text-left text-[var(--muted)] font-mono text-xs border-b border-white/5">
+            <th class="px-5 py-3 font-medium">IP SUMBER</th>
+            <th class="px-5 py-3 font-medium">SISA WAKTU</th>
+            <th class="px-5 py-3 font-medium">KENA KE</th>
+            <th class="px-5 py-3 font-medium">ALASAN</th>
+            <th class="px-5 py-3 font-medium text-right">KONTROL</th>
+          </tr>
+        </thead>
+        <tbody id="bansBody"></tbody>
+      </table>
+    </div>
+  </section>
+
+</main>
+
+<footer class="border-t border-white/5 py-6 text-center text-xs text-[var(--muted)] font-mono">
+  SENTINEL FIREWALL · dashboard panel · hubungkan ke backend API kamu via AJAX endpoint
+</footer>
+
+<script>
+$(function(){
+
+  // ==== KONFIGURASI ENDPOINT (ganti sesuai backend kamu) ====
+  const API = {
+    stats:  '/api/stats',
+    rules:  '/api/rules',
+    logs:   '/api/logs',
+    addRule:'/api/rules/add',
+    delRule:'/api/rules/delete',
+    bans:   '/api/bans',
+    unban:  '/api/bans/unban'
+  };
+  const USE_MOCK = true; // set false kalau backend sudah siap
+
+  // ---------- STATE ----------
+  let rules = [
+    {id:1, target:'192.168.1.0/24', proto:'TCP', port:'22', action:'allow'},
+    {id:2, target:'0.0.0.0/0', proto:'UDP', port:'53', action:'allow'},
+    {id:3, target:'45.33.12.0/24', proto:'ANY', port:'*', action:'block'},
+    {id:4, target:'0.0.0.0/0', proto:'TCP', port:'3389', action:'block'}
+  ];
+  let trafficHistory = Array.from({length:30}, () => Math.random()*40+20);
+  let blockedCount = 128;
+
+  // ---------- RENDER: RULES ----------
+  function renderRules(){
+    const rows = rules.map(r => `
+      <tr class="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition">
+        <td class="px-5 py-3 font-mono">${r.target}</td>
+        <td class="px-5 py-3 text-[var(--muted)]">${r.proto}</td>
+        <td class="px-5 py-3 font-mono">${r.port}</td>
+        <td class="px-5 py-3">
+          <span class="text-xs px-2 py-1 rounded-lg font-mono ${r.action==='allow'?'badge-allow':'badge-block'}">
+            ${r.action==='allow' ? 'IZINKAN' : 'BLOKIR'}
+          </span>
+        </td>
+        <td class="px-5 py-3 text-right">
+          <button data-id="${r.id}" class="btnDelRule text-[var(--muted)] hover:text-[var(--red)] transition px-2">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </td>
+      </tr>
+    `).join('');
+    $('#rulesBody').html(rows);
+    $('#statRules').text(rules.length);
+  }
+
+  // ---------- RENDER: SPARKLINE ----------
+  function renderChart(){
+    const canvas = document.getElementById('chartTraffic');
+    const ctx = canvas.getContext('2d');
+    const w = canvas.width = canvas.clientWidth * 2;
+    const h = canvas.height = canvas.clientHeight * 2;
+    ctx.clearRect(0,0,w,h);
+    const max = Math.max(...trafficHistory), min = Math.min(...trafficHistory);
+    const step = w / (trafficHistory.length - 1);
+
+    const grad = ctx.createLinearGradient(0,0,0,h);
+    grad.addColorStop(0, 'rgba(44,232,209,0.35)');
+    grad.addColorStop(1, 'rgba(44,232,209,0)');
+
+    ctx.beginPath();
+    trafficHistory.forEach((v,i)=>{
+      const x = i*step;
+      const y = h - ((v-min)/(max-min||1)) * (h*0.8) - h*0.1;
+      i===0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.strokeStyle = '#2ce8d1';
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+
+    ctx.lineTo(w, h); ctx.lineTo(0,h); ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+  }
+
+  // ---------- LOG ----------
+  const sampleIPs = ['103.22.8.14','182.10.44.2','45.33.12.90','8.8.8.8','192.168.1.24','203.0.113.7'];
+  function pushLog(){
+    const ip = sampleIPs[Math.floor(Math.random()*sampleIPs.length)];
+    const port = [22,80,443,3389,53,8080][Math.floor(Math.random()*6)];
+    const isBlock = Math.random() < 0.35;
+    const time = new Date().toLocaleTimeString('id-ID', {hour12:false});
+    const badge = isBlock
+      ? `<span class="badge-block px-1.5 py-0.5 rounded font-medium">BLOCK</span>`
+      : `<span class="badge-allow px-1.5 py-0.5 rounded font-medium">ALLOW</span>`;
+    const line = `
+      <div class="log-line flex items-center gap-3 text-[var(--muted)]">
+        <span class="text-[10px] opacity-60">${time}</span>
+        ${badge}
+        <span class="text-white/80">${ip}:${port}</span>
+      </div>`;
+    const $log = $('#logBody');
+    $log.append(line);
+    if($log.children().length > 60) $log.children().first().remove();
+    $log.scrollTop($log[0].scrollHeight);
+
+    if(isBlock){ blockedCount++; $('#statBlocked').text(blockedCount); }
+  }
+
+  // ---------- STATS TICK (mock AJAX) ----------
+  function fetchStatsMock(){
+    trafficHistory.shift();
+    trafficHistory.push(Math.random()*40 + 20);
+    renderChart();
+
+    const totalMb = (trafficHistory.reduce((a,b)=>a+b,0)).toFixed(1);
+    $('#statTraffic').text(totalMb + ' MB');
+    $('#trafficDelta').text((Math.random()>0.5?'+':'-') + (Math.random()*5).toFixed(1) + '%');
+    $('#statConns').text(Math.floor(Math.random()*40 + 60));
+    $('#statLatency').text((Math.random()*0.8 + 0.2).toFixed(2) + ' ms');
+  }
+
+  function fetchStatsReal(){
+    $.ajax({ url: API.stats, method:'GET', dataType:'json' })
+      .done(function(data){
+        // sesuaikan mapping field dengan response backend asli kamu
+        $('#statTraffic').text(data.traffic + ' MB');
+        $('#statBlocked').text(data.blocked);
+        $('#statConns').text(data.connections);
+        $('#statLatency').text(data.latency + ' ms');
+      })
+      .fail(function(){
+        console.warn('Gagal ambil data stats, cek koneksi backend.');
+      });
+  }
+
+  // ---------- ADD RULE ----------
+  $('#btnAddRule').on('click', function(){
+    Swal.fire({
+      title: 'Tambah Rule Baru',
+      background: '#0b0f1a',
+      color: '#e7ecf6',
+      html: `
+        <input id="swTarget" class="swal2-input" placeholder="Target IP / CIDR, cth: 10.0.0.0/8">
+        <select id="swProto" class="swal2-input">
+          <option value="TCP">TCP</option>
+          <option value="UDP">UDP</option>
+          <option value="ANY">ANY</option>
+        </select>
+        <input id="swPort" class="swal2-input" placeholder="Port, cth: 443 atau *">
+        <select id="swAction" class="swal2-input">
+          <option value="block">Blokir</option>
+          <option value="allow">Izinkan</option>
+        </select>
+      `,
+      confirmButtonText: 'Simpan Rule',
+      confirmButtonColor: '#2ce8d1',
+      showCancelButton: true,
+      cancelButtonText: 'Batal',
+      focusConfirm: false,
+      preConfirm: () => {
+        const target = document.getElementById('swTarget').value.trim();
+        const port = document.getElementById('swPort').value.trim();
+        if(!target || !port){
+          Swal.showValidationMessage('Target dan port wajib diisi');
+          return false;
+        }
+        return {
+          target,
+          proto: document.getElementById('swProto').value,
+          port,
+          action: document.getElementById('swAction').value
+        };
+      }
+    }).then((res) => {
+      if(!res.isConfirmed) return;
+      const newRule = { id: Date.now(), ...res.value };
+
+      if(USE_MOCK){
+        rules.unshift(newRule);
+        renderRules();
+        Swal.fire({title:'Rule tersimpan', icon:'success', background:'#0b0f1a', color:'#e7ecf6', confirmButtonColor:'#2ce8d1', timer:1500, showConfirmButton:false});
+      } else {
+        $.ajax({ url: API.addRule, method:'POST', contentType:'application/json', data: JSON.stringify(newRule) })
+          .done(()=>{ rules.unshift(newRule); renderRules(); Swal.fire({title:'Rule tersimpan', icon:'success', background:'#0b0f1a', color:'#e7ecf6', confirmButtonColor:'#2ce8d1'}); })
+          .fail(()=> Swal.fire({title:'Gagal menyimpan', icon:'error', background:'#0b0f1a', color:'#e7ecf6', confirmButtonColor:'#ef5b5b'}));
+      }
+    });
+  });
+
+  // ---------- DELETE RULE ----------
+  $('#rulesBody').on('click', '.btnDelRule', function(){
+    const id = Number($(this).data('id'));
+    Swal.fire({
+      title: 'Hapus rule ini?',
+      text: 'Tindakan ini tidak bisa dibatalkan.',
+      icon: 'warning',
+      background:'#0b0f1a', color:'#e7ecf6',
+      showCancelButton: true,
+      confirmButtonText: 'Hapus',
+      confirmButtonColor: '#ef5b5b',
+      cancelButtonText: 'Batal'
+    }).then((res)=>{
+      if(!res.isConfirmed) return;
+      if(USE_MOCK){
+        rules = rules.filter(r => r.id !== id);
+        renderRules();
+      } else {
+        $.ajax({ url: API.delRule, method:'POST', contentType:'application/json', data: JSON.stringify({id}) })
+          .done(()=>{ rules = rules.filter(r => r.id !== id); renderRules(); })
+          .fail(()=> Swal.fire({title:'Gagal menghapus', icon:'error', background:'#0b0f1a', color:'#e7ecf6', confirmButtonColor:'#ef5b5b'}));
+      }
+    });
+  });
+
+  $('#btnClearLog').on('click', function(){ $('#logBody').empty(); });
+
+  // ---------- BANNED IP PANEL ----------
+  let bans = [
+    {ip:'45.33.12.90', remaining_seconds:241, hit_count:2, reason:'WAF:score11:SQLI:UNION_SELECT'},
+    {ip:'203.0.113.7', remaining_seconds:53,  hit_count:1, reason:'ANOMALY:PORT_SCAN'}
+  ];
+
+  function fmtSeconds(s){
+    if(s >= 60) return Math.floor(s/60) + ' menit ' + (s%60) + ' dtk';
+    return s + ' detik';
+  }
+  function esc(str){
+    return String(str).replace(/[&<>"']/g, c =>
+      ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function renderBans(){
+    if(!bans.length){
+      $('#bansBody').html(
+        '<tr><td colspan="5" class="px-5 py-6 text-center text-[var(--muted)] font-mono text-xs">' +
+        'Tidak ada IP yang lagi di-ban — jaringan tenang.</td></tr>');
+      return;
+    }
+    const rows = bans.map(b => `
+      <tr class="border-b border-white/5 last:border-0 hover:bg-white/[0.02] transition">
+        <td class="px-5 py-3 font-mono">${esc(b.ip)}</td>
+        <td class="px-5 py-3 font-mono ${b.remaining_seconds < 60 ? 'badge-warn rounded px-1.5' : 'text-[var(--muted)]'}">${fmtSeconds(b.remaining_seconds)}</td>
+        <td class="px-5 py-3 text-[var(--muted)] font-mono">#${b.hit_count}</td>
+        <td class="px-5 py-3 font-mono text-xs max-w-[280px] truncate" title="${esc(b.reason)}">${esc(b.reason)}</td>
+        <td class="px-5 py-3 text-right">
+          <button data-ip="${esc(b.ip)}" class="btnUnban text-[var(--muted)] hover:text-[var(--cyan)] transition px-2" title="Cabut ban">
+            <i class="fa-solid fa-unlock"></i>
+          </button>
+        </td>
+      </tr>`).join('');
+    $('#bansBody').html(rows);
+  }
+
+  function fetchBans(){
+    if(USE_MOCK){
+      // kurangi sisa waktu supaya terasa hidup, buang yang expired
+      bans = bans.map(b => ({...b, remaining_seconds: b.remaining_seconds - 4}))
+                 .filter(b => b.remaining_seconds > 0);
+      renderBans();
+    } else {
+      $.ajax({ url: API.bans, method:'GET', dataType:'json' })
+        .done(data => { bans = data; renderBans(); })
+        .fail(() => console.warn('Gagal ambil daftar ban.'));
+    }
+  }
+
+  $('#bansBody').on('click', '.btnUnban', function(){
+    const ip = $(this).data('ip');
+    Swal.fire({
+      title: 'Cabut ban ' + ip + '?',
+      icon:'question', background:'#0b0f1a', color:'#e7ecf6',
+      showCancelButton:true, confirmButtonText:'Unban',
+      confirmButtonColor:'#2ce8d1', cancelButtonText:'Batal'
+    }).then(res => {
+      if(!res.isConfirmed) return;
+      if(USE_MOCK){
+        bans = bans.filter(b => b.ip !== ip); renderBans();
+      } else {
+        $.ajax({ url: API.unban, method:'POST', contentType:'application/json',
+                 data: JSON.stringify({ip}) })
+          .done(()=>{ bans = bans.filter(b => b.ip !== ip); renderBans(); })
+          .fail(()=> Swal.fire({title:'Gagal unban', icon:'error',
+                                background:'#0b0f1a', color:'#e7ecf6',
+                                confirmButtonColor:'#ef5b5b'}));
+      }
+    });
+  });
+
+  // ---------- INIT ----------
+  renderRules();
+  renderBans();
+  renderChart();
+  for(let i=0;i<8;i++) pushLog();
+
+  setInterval(USE_MOCK ? fetchStatsMock : fetchStatsReal, 2000);
+  setInterval(fetchBans, USE_MOCK ? 4000 : 5000);
+  setInterval(pushLog, 1800);
+  $(window).on('resize', renderChart);
+});
+</script>
+</body>
+</html>
