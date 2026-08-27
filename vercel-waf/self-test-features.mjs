@@ -78,5 +78,54 @@ r = await middleware(mk("/home", { "x-vercel-forwarded-for": "8.8.8.8",
   .catch(() => "pass-through");
 ok("geo allow ID -> bukan GEO_BLOCKED", r !== "GEO_BLOCKED", `res=${r}`);
 
+// ---------- ROUTES: CRUD + matching (reverse-proxy dinamis) ------------------
+{
+  const { matchRoute } = await import("./middleware.js");
+
+  // matching: longest-prefix wins, "*" catch-all
+  const routes = { "/": "https://root.com", "/api": "https://api.com", "/api/v2": "https://v2.com" };
+  ok("match: longest prefix menang", matchRoute("/api/v2/users", routes).destination === "https://v2.com");
+  ok("match: prefix biasa", matchRoute("/api/users", routes).destination === "https://api.com");
+  ok("match: root", matchRoute("/home", routes).destination === "https://root.com");
+  ok("match: wildcard *", matchRoute("/anything", { "*": "https://all.com" }).destination === "https://all.com");
+  ok("match: tanpa hit -> null", matchRoute("/zzz", { "/a": "https://x.com" }) === null);
+
+  // CRUD via admin API (memory storage karena tanpa env KV)
+  const auth = { "x-sentinel-token": "sentin-demo" };
+  let r = await middleware(new Request("http://x.test/__waf/routes", { headers: auth }));
+  ok("routes GET (kosong)", (await r.json()).routes !== undefined);
+
+  r = await middleware(new Request("http://x.test/__waf/routes", {
+    method: "POST", headers: { ...auth, "content-type": "application/json" },
+    body: JSON.stringify({ prefix: "/app1", destination: "https://php-host.test" }),
+  }));
+  ok("routes POST valid -> ok", (await r.json()).ok === true);
+
+  r = await middleware(new Request("http://x.test/__waf/routes", {
+    method: "POST", headers: { ...auth, "content-type": "application/json" },
+    body: JSON.stringify({ prefix: "/bad", destination: "ftp://nope" }),
+  }));
+  ok("routes POST destination invalid -> 400", r.status === 400);
+
+  r = await middleware(new Request("http://x.test/__waf/routes", {
+    method: "POST", headers: { ...auth, "content-type": "application/json" },
+    body: JSON.stringify({ prefix: "nonsense", destination: "https://x.com" }),
+  }));
+  ok("routes POST prefix invalid -> 400", r.status === 400);
+
+  r = await middleware(new Request("http://x.test/__waf/routes", { headers: auth }));
+  ok("routes GET berisi /app1", (await r.json()).routes["/app1"] === "https://php-host.test");
+
+  r = await middleware(new Request("http://x.test/__waf/routes?prefix=/nope", { method: "DELETE", headers: auth }));
+  ok("routes DELETE unknown -> 404", r.status === 404);
+
+  r = await middleware(new Request("http://x.test/__waf/routes?prefix=/app1", { method: "DELETE", headers: auth }));
+  ok("routes DELETE existing -> ok", (await r.json()).ok === true);
+
+  // tanpa token -> 401
+  r = await middleware(mk("/__waf/routes"));
+  ok("routes tanpa token -> 401", r.status === 401);
+}
+
 console.log(`\nPASS=${pass} FAIL=${fail}`);
 process.exit(fail ? 1 : 0);

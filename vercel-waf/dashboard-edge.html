@@ -15,6 +15,20 @@
 </style>
 </head>
 <body>
+  <!-- LOGIN OVERLAY — tampil sampai token valid -->
+  <div id="loginGate" class="fixed inset-0 z-50 flex items-center justify-center" style="background:rgba(5,7,13,.92);backdrop-filter:blur(8px)">
+    <form id="loginForm" class="glass p-8 w-[22rem] flex flex-col gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#22ccd6] to-[#0e7c72] flex items-center justify-center"><span class="text-[#05070d] font-bold">S</span></div>
+        <div><p class="font-bold tracking-wide">SENTINEL <span class="text-[#22ccd6]">EDGE</span></p><p class="text-[10px] text-[var(--muted)] font-mono">ADMIN LOGIN</p></div>
+      </div>
+      <input id="loginToken" type="password" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 font-mono text-sm" placeholder="admin token" autocomplete="current-password">
+      <p id="loginErr" class="text-xs" style="color:var(--red);display:none">token salah / tidak terautorisasi</p>
+      <button id="loginBtn" class="text-sm font-semibold bg-[#22ccd6] text-[#05070d] px-4 py-2 rounded-lg hover:brightness-110">Masuk</button>
+      <p class="text-[10px] text-[var(--muted)]">token disimpan di localStorage browser ini saja</p>
+    </form>
+  </div>
+
   <header class="flex items-center justify-between mb-8">
     <div class="flex items-center gap-3">
       <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-[#22ccd6] to-[#0e7c72] flex items-center justify-center">
@@ -27,7 +41,7 @@
     </div>
     <label class="text-xs text-[var(--muted)] flex items-center gap-2">
       Admin token
-      <input id="token" value="sentin-demo" class="bg-white/5 border border-white/10 rounded-lg px-2 py-1 font-mono text-xs" placeholder="token">
+      <input id="token" value="" class="bg-white/5 border border-white/10 rounded-lg px-2 py-1 font-mono text-xs" placeholder="token">
     </label>
   </header>
 
@@ -65,6 +79,22 @@
     </div>
     <div id="presets" class="flex flex-wrap gap-2"></div>
   </section>
+  <section class="glass p-5 mb-8">
+    <div class="flex items-center justify-between mb-1">
+      <h2 class="font-semibold">Proxy Routes <span class="text-xs text-[var(--muted)] font-normal">— destination per host/domain (dipakai WAF gateway)</span></h2>
+      <button id="rtRefresh" class="text-xs px-3 py-1 rounded-lg bg-white/5 border border-white/10 hover:border-[#22ccd6]/60">Refresh</button>
+    </div>
+    <p id="rtStorage" class="text-[10px] text-[var(--muted)] font-mono mb-3"></p>
+    <div id="routesList" class="space-y-2 mb-4"></div>
+    <form id="routeForm" class="grid grid-cols-1 md:grid-cols-[10rem_1fr_auto] gap-2">
+      <input id="rtPrefix" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono" placeholder="/app1 atau *">
+      <input id="rtDest" class="bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm font-mono" placeholder="https://php-host-kamu.com">
+      <button id="rtAdd" class="text-sm font-semibold bg-[#22ccd6] text-[#05070d] px-4 py-2 rounded-lg hover:brightness-110">Tambah</button>
+    </form>
+    <p id="rtErr" class="text-xs mt-2" style="color:var(--red);display:none"></p>
+    <p class="text-[10px] text-[var(--muted)] mt-2">prefix terpanjang menang · <code>*</code> = catch-all · request lolos WAF di-proxy ke destination · header <code>x-sentinel-ip</code> dikirim ke host tujuan</p>
+  </section>
+
 <script type="module" src="./dash.mjs"></script>
 </body>
 </html>

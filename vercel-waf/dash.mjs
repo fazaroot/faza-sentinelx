@@ -103,6 +103,86 @@ async function doScan() {
 // init
 $("scanBtn").onclick = doScan;
 renderPresets();
+
+// ---------- LOGIN GATE -------------------------------------------------------
+const LS_KEY = "sentinelToken";
+function showErr(msg) { const el = $("loginErr"); el.textContent = msg; el.style.display = "block"; }
+
+async function tryLogin(tok) {
+  $("token").value = tok;
+  try {
+    const r = await fetch(apiUrl("__waf/config"));
+    if (!r.ok) throw new Error(r.status);
+    localStorage.setItem(LS_KEY, tok);
+    $("loginGate").style.display = "none";
+    refreshConfig(); refreshStatus(); refreshRoutes();
+    return true;
+  } catch {
+    showErr("token salah / tidak terautorisasi");
+    return false;
+  }
+}
+
+$("loginForm").addEventListener("submit", (e) => {
+  e.preventDefault();
+  const tok = $("loginToken").value.trim();
+  if (!tok) return showErr("isi token dulu");
+  tryLogin(tok);
+});
+
+// auto-login bila ada token tersimpan
+(async () => {
+  const saved = localStorage.getItem(LS_KEY);
+  if (saved && !(await tryLogin(saved))) localStorage.removeItem(LS_KEY);
+})();
+
+// ---------- ROUTES CRUD ------------------------------------------------------
+async function refreshRoutes() {
+  try {
+    const r = await fetch(apiUrl("__waf/routes"));
+    const d = await r.json();
+    $("rtStorage").textContent = "# storage: " + (d.storage || "?") +
+      (d.storage === "memory" ? "  (⚠ tidak persisten — hubungkan Upstash Redis di Vercel Marketplace)" : "");
+    const list = $("routesList");
+    const entries = Object.entries(d.routes || {});
+    if (!entries.length) {
+      list.innerHTML = `<p class="text-xs text-[var(--muted)]">belum ada route — semua request diteruskan ke routing default (404 bila tanpa app)</p>`;
+      return;
+    }
+    list.innerHTML = entries.map(([prefix, dest]) =>
+      `<div class="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2">
+         <div class="font-mono text-xs truncate"><span class="text-[#22ccd6]">${esc(prefix)}</span> → ${esc(dest)}</div>
+         <button data-prefix="${esc(prefix)}" class="rtDel text-xs px-2 py-1 rounded-lg border border-white/10 hover:border-[var(--red)]" style="color:var(--red)">hapus</button>
+       </div>`).join("");
+    for (const btn of list.querySelectorAll(".rtDel")) {
+      btn.onclick = () => delRoute(btn.dataset.prefix);
+    }
+  } catch (e) {
+    $("rtStorage").textContent = "gagal ambil routes (" + e + ")";
+  }
+}
+
+$("rtRefresh").onclick = refreshRoutes;
+
+$("routeForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const err = $("rtErr"); err.style.display = "none";
+  const prefix = $("rtPrefix").value.trim();
+  const destination = $("rtDest").value.trim();
+  const res = await fetch(apiUrl("__waf/routes"), {
+    method: "POST", body: JSON.stringify({ prefix, destination }),
+  });
+  const d = await res.json();
+  if (!res.ok) { err.textContent = d.error || "gagal"; err.style.display = "block"; return; }
+  $("rtPrefix").value = ""; $("rtDest").value = "";
+  refreshRoutes();
+});
+
+async function delRoute(prefix) {
+  await fetch(apiUrl("__waf/routes") + "&prefix=" + encodeURIComponent(prefix), { method: "DELETE" });
+  refreshRoutes();
+}
+
 refreshConfig();
 refreshStatus();
 setInterval(refreshStatus, 5000);

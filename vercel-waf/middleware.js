@@ -52,6 +52,66 @@ async function getLimiter() {
              : new SlidingWindowLimiter({ limit: RATE_LIMIT, windowMs: RATE_WINDOW_MS });
 }
 
+// --- Routing table (reverse-proxy dinamis, dikelola via /__waf/routes) --------
+// Disimpan di Upstash Redis (persisten lintas-instance); tanpa KV -> in-memory
+// per-instance (hilang saat cold start — UI menampilkan warning).
+const ROUTES_KEY = "sentinel:routes";
+let _memRoutes = null;
+
+async function getRoutes() {
+  await ensureKv();
+  if (_kv) {
+    try {
+      const raw = await _kv.get(ROUTES_KEY);
+      if (!raw) return {};
+      const obj = (typeof raw === "string") ? JSON.parse(raw) : raw;
+      return (obj && typeof obj === "object") ? obj : {};
+    } catch { /* fallback ke memori */ }
+  }
+  return _memRoutes || (_memRoutes = {});
+}
+
+async function setRoutes(routes) {
+  await ensureKv();
+  if (_kv) {
+    try { await _kv.set(ROUTES_KEY, JSON.stringify(routes)); }
+    catch { /* tetap simpan di memori */ }
+  }
+  _memRoutes = routes;
+}
+
+/** prefix terpanjang menang; "*" = catch-all */
+export function matchRoute(path, routes) {
+  let best = null;
+  for (const prefix of Object.keys(routes)) {
+    if (prefix === "*" || path === prefix || path.startsWith(prefix)) {
+      if (best === null || prefix.length > best.length) best = prefix;
+    }
+  }
+  return best === null ? null : { prefix: best, destination: routes[best] };
+}
+
+/** fetch ke host tujuan & kembalikan response-nya (reverse proxy) */
+async function proxyTo(req, destination, extra) {
+  const url = new URL(req.url);
+  const target = new URL(url.pathname + url.search, destination);
+  const headers = new Headers(req.headers);
+  if (extra) for (const [k, v] of extra) headers.set(k, v);
+  headers.set("host", target.host);
+  headers.set("x-forwarded-host", url.host);
+  headers.set("x-forwarded-proto", "https");
+  const isBody = req.method !== "GET" && req.method !== "HEAD";
+  const upstream = await fetch(target, {
+    method: req.method,
+    headers,
+    body: isBody ? (req.__sentinelBody ?? "") : undefined,
+    redirect: "manual",
+  });
+  const respHeaders = new Headers(upstream.headers);
+  respHeaders.set("x-sentinel-proxied", destination);
+  return new Response(upstream.body, { status: upstream.status, headers: respHeaders });
+}
+
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), {
     status,
@@ -168,6 +228,21 @@ export default async function middleware(req) {
     }, 403);
   }
 
+  // --- Dynamic reverse-proxy: request lolos WAF -> route ke host tujuan -------
+  const routes = await getRoutes();
+  if (Object.keys(routes).length) {
+    const hit = matchRoute(url.pathname, routes);
+    if (hit) {
+      extra.set("x-sentinel-route", hit.prefix);
+      try {
+        return await proxyTo(req, hit.destination, extra);
+      } catch (e) {
+        return json({ error: "Bad Gateway", code: "WAF_PROXY_FAIL",
+                      destination: hit.destination, detail: String((e && e.message) || e) }, 502);
+      }
+    }
+  }
+
   return continueRequest(req, extra);
 }
 
@@ -178,8 +253,8 @@ function hdr(ip) {
 }
 
 async function dispatchAdmin(req, url, ip, country) {
-  const action = url.pathname.slice("/__waf/".length);
-  if (!action) return json({ endpoints: ["config", "status", "scan"], ip, country, token: ADMIN_TOKEN });
+  const action = url.pathname.slice("/__waf/".length).replace(/\/$/, "");
+  if (!action) return json({ endpoints: ["config", "status", "scan", "routes"], ip, country });
 
   if (action === "config") {
     const kv = await ensureKv();
@@ -187,10 +262,11 @@ async function dispatchAdmin(req, url, ip, country) {
       algorithm: "Aho-Corasick + anomaly scoring (CRS)",
       defaultThreshold: SCORE.THRESHOLD,
       scoreTable: SCORE,
-      rateLimit: { limit: RATE_LIMIT, windowMs: RATE_WINDOW_MS, storage: _kv ? "upstash-kv" : "local" },
+      rateLimit: { limit: RATE_LIMIT, windowMs: RATE_WINDOW_MS, storage: _kv ? "upstash-redis" : "local" },
       bypass: BYPASS_PREFIXES,
       whitelist: _ALLOWED,
       blockCountries: _BLOCK_COUNTRY,
+      routesStorage: _kv ? "upstash-redis" : "memory (tidak persisten — hubungkan Upstash Redis)",
     });
   }
 
@@ -212,6 +288,44 @@ async function dispatchAdmin(req, url, ip, country) {
     return json({ verdict: verr.suspicious ? "BLOCK" : "PASS",
                   score: verr.score, threshold: SCORE.THRESHOLD,
                   matches: verr.matches.slice(0, 20) });
+  }
+
+  // --- Routes CRUD: manajemen destination proxy dari dashboard ---------------
+  if (action === "routes") {
+    const method = (req.method || "GET").toUpperCase();
+
+    if (method === "GET") {
+      const routes = await getRoutes();
+      return json({ routes, storage: _kv ? "upstash-redis" : "memory" });
+    }
+
+    if (method === "POST") {
+      let input = {};
+      try { input = JSON.parse(await req.text()); }
+      catch { return json({ error: "invalid JSON body", example: { prefix: "/app1", destination: "https://php-host.com" } }, 400); }
+      const prefix = String(input.prefix || "").trim();
+      const destination = String(input.destination || "").trim().replace(/\/+$/, "");
+      if (!prefix || (!prefix.startsWith("/") && prefix !== "*"))
+        return json({ error: "prefix harus diawali '/' (atau '*' untuk catch-all)" }, 400);
+      try { const u = new URL(destination); if (!/^https?:$/.test(u.protocol)) throw new Error("proto"); }
+      catch { return json({ error: "destination harus URL http(s) valid, mis https://host.com" }, 400); }
+      const routes = await getRoutes();
+      routes[prefix] = destination;
+      await setRoutes(routes);
+      return json({ ok: true, prefix, destination, routes });
+    }
+
+    if (method === "DELETE") {
+      let prefix = url.searchParams.get("prefix") || "";
+      if (!prefix) { try { prefix = String(JSON.parse(await req.text()).prefix || ""); } catch {} }
+      const routes = await getRoutes();
+      if (!prefix || !(prefix in routes)) return json({ error: "prefix tidak ditemukan", prefix }, 404);
+      delete routes[prefix];
+      await setRoutes(routes);
+      return json({ ok: true, removed: prefix, routes });
+    }
+
+    return json({ error: "method tidak didukung", allow: ["GET", "POST", "DELETE"] }, 405);
   }
 
   return json({ error: "unknown", action, ip }, 400);
