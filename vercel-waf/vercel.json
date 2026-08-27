@@ -1,7 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "version": 2,
-  "framework": "node",
+  "framework": null,
   "env": {
     "WAF_RATE_LIMIT": "60",
     "WAF_RATE_WINDOW_MS": "60000"
