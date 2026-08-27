@@ -129,7 +129,7 @@ Layer-7 WAF untuk aplikasi yang di-deploy di **Vercel**. Jalan di Edge Runtime.
 | `WAF_RATE_WINDOW_MS` | `60000` | panjang window (ms) |
 | `WAF_ALLOWED_IPS` | *(kosong)* | whitelist IP/CIDR (anti-lockout) |
 | `WAF_BLOCKED_COUNTRIES` | *(kosong)* | negara diblokir via GeoIP |
-| `UPSTASH_KV_REST_URL` / `UPSTASH_KV_REST_TOKEN` | *(auto)* | rate limiter cross-edge konsisten |
+| `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | *(auto dari Marketplace)* | rate-limit cross-edge (Upstash Redis; `@vercel/kv` deprecated) |
 
 ### Deploy
 ```bash

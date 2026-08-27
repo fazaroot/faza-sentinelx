@@ -16,9 +16,10 @@
   "_docs": [
     "Preset: Node  |  RootDir: vercel-waf  |  Edge Middleware auto-detected dari middleware.mjs",
     "Wajib/env opsional (set di Vercel Project Settings -> Environment Variables):",
-    "  WAF_ALLOWED_IPS       -> trusted IP/CIDR, anti-lockout   (contoh: 127.0.0.1,10.0.0.0/8)",
-    "  WAF_BLOCKED_COUNTRIES -> negara blokir GeoIP             (contoh: US,RU)",
-    "  UPSTASH_KV_REST_URL   -> Upstash Redis URL (rate-limit cross-edge, secret -> dashboard)",
-    "  UPSTASH_KV_REST_TOKEN -> Upstash token  (secret -> dashboard)"
+    "  WAF_ALLOWED_IPS          -> trusted IP/CIDR, anti-lockout (contoh: 127.0.0.1,10.0.0.0/8)",
+    "  WAF_BLOCKED_COUNTRIES    -> negara blokir GeoIP           (contoh: US,RU)",
+    "  UPSTASH_REDIS_REST_URL   -> Upstash Redis via Vercel Marketplace (secret -> dashboard)",
+    "  UPSTASH_REDIS_REST_TOKEN -> Upstash token                        (secret -> dashboard)",
+    "Catatan: @vercel/kv sudah deprecated; rate-limit cross-edge kini pakai @upstash/redis."
   ]
 }

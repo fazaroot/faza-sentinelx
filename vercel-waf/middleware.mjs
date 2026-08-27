@@ -25,22 +25,25 @@ const _BLOCK_COUNTRY = (process.env.WAF_BLOCKED_COUNTRIES || "").split(",").map(
 
 const BYPASS_PREFIXES = ["/_next/static", "/static", "/_vercel/insights", "/favicon.ico", "/health"];
 
-// --- Rate limiter: pilih KV kalau tersedia, fallback lokal -------------------
+// --- Rate limiter: pilih Upstash Redis kalau tersedia, fallback lokal ---------
 let _kv = null;
 let _kvReady = false;
 async function ensureKv() {
   if (_kvReady) return;
   try {
-    if (process.env.UPSTASH_KV_REST_URL && process.env.UPSTASH_KV_REST_TOKEN) {
-      // dynamic import agar noda paket tidak wajib pd project tanpa KV
-      const { createClient } = await import("@vercel/kv");
-      _kv = createClient({ url: process.env.UPSTASH_KV_REST_URL, token: process.env.UPSTASH_KV_REST_TOKEN });
+    // Env standard Vercel Marketplace (Upstash Redis), fallback ke legacy KV nama
+    const url   = process.env.UPSTASH_REDIS_REST_URL   || process.env.UPSTASH_KV_REST_URL;
+    const token = process.env.UPSTASH_REDIS_REST_TOKEN || process.env.UPSTASH_KV_REST_TOKEN;
+    if (url && token) {
+      // dynamic import agar paket tak wajib utk deploy tanpa Redis
+      const { Redis } = await import("@upstash/redis");
+      _kv = new Redis({ url, token });
       _kvReady = true;
     } else {
-      _kv = null; _kvReady = true;   // tidak ada kv config -> pakai lokal
+      _kv = null; _kvReady = true;   // tidak ada redis config -> pakai lokal
     }
   } catch (e) {
-    _kv = null; _kvReady = true;     // import gagal di kedeplukan -> lokal
+    _kv = null; _kvReady = true;     // import gagal saat deploy -> lokal fallback
   }
 }
 async function getLimiter() {

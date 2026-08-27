@@ -26,14 +26,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "vercel"
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: vercel-waf/package-lock.json
 
-      - name: Install @vercel/kv untuk produksi (dev-test tak butuh)
-        run: npm install
+      - name: Install deps
+        run: npm ci --no-audit --no-fund
 
       - name: Run test suites
         run: npm test
@@ -49,13 +50,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node 22
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: vercel-waf/package-lock.json
 
       - name: Install deps
-        run: npm install
+        run: npm ci --no-audit --no-fund
 
       - name: Deploy to Vercel (prod)
         uses: amondnet/vercel-action@v20
@@ -79,9 +82,11 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: vercel-waf/package-lock.json
 
-      - run: npm install
+      - run: npm ci --no-audit --no-fund
 
       - name: Deploy preview to Vercel
         uses: amondnet/vercel-action@v20
