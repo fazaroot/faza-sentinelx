@@ -97,8 +97,8 @@ export class RateLimiterKv {
     const key = `sentinel:rl:${ip}`;
     try {
       // alive key (Redis) pakai TTL; INCR + EKSPRES saat window pertama
-      const countNow = await this.kv.incr(key, 1, { px: this.windowMs });
-      // tetapkan TTL hanya kalau baru dibuat (count==1)
+            const countNow = await this.kv.incr(key);            // INCR -> number
+      // TTL disetti hanya saat key baru dibuat (race-condition-safe via NX-style check count==1)
       if (countNow === 1) await this.kv.expire(key, Math.ceil(this.windowMs / 1000));
       const remaining = Math.max(0, this.limit - countNow);
       const allowed = countNow <= this.limit;

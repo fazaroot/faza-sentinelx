@@ -1,0 +1,17 @@
+{
+  "name": "sentinel-edge-waf",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Vercel Edge WAF: L7 WAF (Aho-Corasick) + KV rate-limit + GeoIP + whitelist",
+  "scripts": {
+    "test": "node self-test.mjs && node self-test-edge.mjs && node self-test-features.mjs",
+    "dev": "vercel dev"
+  },
+  "dependencies": {
+    "@vercel/kv": "3.0.0"
+  },
+  "vercel": {
+    "root": "vercel-waf"
+  }
+}
