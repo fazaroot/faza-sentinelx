@@ -3,7 +3,7 @@
 // Jalankan: node vercel-waf/self-test-edge.mjs
 // ============================================================================
 import { SlidingWindowLimiter, clientIp } from "./src/ratelimit.mjs";
-import middleware from "./middleware.mjs";
+import middleware from "./middleware.js";
 
 let pass = 0, fail = 0;
 const ok = (n, c, x = "") => { if (c) { pass++; console.log(`  [OK] ${n}${x ? " -> " + x : ""}`); } else { fail++; console.log(`  [FAIL] ${n}`); } };

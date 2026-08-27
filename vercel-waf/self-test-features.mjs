@@ -48,7 +48,7 @@ process.env.WAF_ALLOWED_IPS = "203.0.113.7,10.0.0.0/8";
 process.env.WAF_BLOCKED_COUNTRIES = "US,CN";
 process.env.WAF_ADMIN_TOKEN = "sentin-demo";
 
-const { default: middleware } = await import("./middleware.mjs");
+const { default: middleware } = await import("./middleware.js");
 
 const mk = (url, headers = {}) =>
   new Request("http://x.test" + url, { method: "GET", headers });

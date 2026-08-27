@@ -14,7 +14,7 @@ aktif di cloud** (Edge Runtime Vercel), persis pola Vercel Firewall / CF Workers
 vercel-waf/
 ├── src/wafcore.mjs      # engine WAF: Aho-Corasick + anomaly scoring + decode
 ├── src/ratelimit.mjs    # rate limiter sliding-window per-IP
-├── middleware.mjs        # Vercel Edge Middleware (WAF + rate limit + admin API)
+├── middleware.js        # Vercel Edge Middleware (WAF + rate limit + admin API)
 ├── dash.mjs              # logika dashboard (dipakai dashboard-edge.html)
 ├── dashboard-edge.html   # dashboard web <-> Edge API
 ├── self-test.mjs         # test wafcore

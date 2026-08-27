@@ -1,5 +1,5 @@
 // ============================================================================
-// middleware.mjs — Vercel Edge Firewall
+// middleware.js — Vercel Edge Firewall
 //   WAF L7 (Aho-Corasick + anomaly scoring)
 //   + Rate limit per-IP (Upstash/@vercel/kv cross-edge, fallback lokal)
 //   + Whitelist/bypass per-IP (anti-lockout)

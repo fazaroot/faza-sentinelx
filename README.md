@@ -46,7 +46,7 @@ sentinel-firewall/
 ├── vercel-waf/             # Vercel Edge WAF
 │   ├── src/wafcore.mjs     # WAF L7 (Aho-Corasick + scoring)
 │   ├── src/ratelimit.mjs   # Rate limiter (KV + fallback lokal)
-│   ├── middleware.mjs      # Edge Middleware (WAF + rate + GeoIP + whitelist)
+│   ├── middleware.js      # Edge Middleware (WAF + rate + GeoIP + whitelist)
 │   ├── dash.mjs            # dashboard logic
 │   ├── dashboard-edge.html # dashboard web ↔ Edge API
 │   ├── self-test.mjs       # wafcore test

@@ -14,7 +14,7 @@
   },
 
   "_docs": [
-    "Preset: Node  |  RootDir: vercel-waf  |  Edge Middleware auto-detected dari middleware.mjs",
+    "Preset: Node  |  RootDir: vercel-waf  |  Edge Middleware auto-detected dari middleware.js (konvensi Vercel: middleware.js/.ts; .mjs TIDAK dideteksi)",
     "Wajib/env opsional (set di Vercel Project Settings -> Environment Variables):",
     "  WAF_ALLOWED_IPS          -> trusted IP/CIDR, anti-lockout (contoh: 127.0.0.1,10.0.0.0/8)",
     "  WAF_BLOCKED_COUNTRIES    -> negara blokir GeoIP           (contoh: US,RU)",

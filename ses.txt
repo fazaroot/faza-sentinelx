@@ -1,0 +1,8 @@
+Session Summary
+  ID        1787783953633_tixie
+  Duration  57601s
+  Model     cline:nvidia/nemotron-3-ultra-550b-a55b:free
+  CWD       /home/userland/sentinel-firewall
+  Messages  534
+  Cost      $0.00
+  Continue  cline --id 1787783953633_tixie
