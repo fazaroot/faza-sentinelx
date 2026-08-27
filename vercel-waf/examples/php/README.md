@@ -10,21 +10,18 @@ Semua trafik lewat Edge WAF dulu (WAF + rate-limit + GeoIP + whitelist),
 yang lolos diteruskan (proxy) ke hosting PHP kamu — request **tidak pernah
 genit** sampai lolos WAF.
 
-1. Edit `vercel-waf/vercel.json`, tambahkan rewrite ke host PHP kamu:
+1. Buka **dashboard** `https://sentinel-edge-waf.vercel.app/` → login token admin →
+   panel **Proxy Routes** → tambah:
+   - prefix `/` (atau `/app1`) · destination `https://php-host-kamu.com`
+   (bisa juga via API: `POST /__waf/routes` `{"prefix":"/","destination":"https://host"}`)
 
-```json
-{
-  "version": 2,
-  "framework": null,
-  "rewrites": [
-    { "source": "/",            "destination": "/dashboard-edge.html" },
-    { "source": "/(.*)",        "destination": "https://php-host-kamu.com/$1" }
-  ]
-}
-```
+   Prefix otomatis di-strip (gateway-style): `/app1/login` → host menerima `/login`.
+   Path di destination jadi base: `https://host.com/base` → host menerima `/base/login`.
 
-2. Deploy (push → CI otomatis deploy).
-3. Point domain kamu ke Vercel (CNAME), bukan ke hosting PHP.
+2. Point domain kamu ke Vercel (CNAME), bukan ke hosting PHP.
+3. ⚠️ Routes tersimpan di Upstash Redis bila terhubung (persisten); tanpa Redis =
+   in-memory per-instance (hilang saat cold start). Hubungkan lewat Vercel
+   Marketplace → Storage → Upstash Redis.
 
 PHP kamu cukup baca header `x-sentinel-ip` untuk IP asli:
 
