@@ -1,25 +1,9 @@
 {
-  "version": 3,
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
   "framework": "node",
-  "rootDirectory": "vercel-waf",
-
-  "rewrites": [
-    { "source": "/__waf/(.*)", "destination": "/__waf/$1" }
-  ],
-
   "env": {
-    "WAF_ADMIN_TOKEN": "sentin-demo",
     "WAF_RATE_LIMIT": "60",
     "WAF_RATE_WINDOW_MS": "60000"
-  },
-
-  "_docs": [
-    "Preset: Node  |  RootDir: vercel-waf  |  Edge Middleware auto-detected dari middleware.js (konvensi Vercel: middleware.js/.ts; .mjs TIDAK dideteksi)",
-    "Wajib/env opsional (set di Vercel Project Settings -> Environment Variables):",
-    "  WAF_ALLOWED_IPS          -> trusted IP/CIDR, anti-lockout (contoh: 127.0.0.1,10.0.0.0/8)",
-    "  WAF_BLOCKED_COUNTRIES    -> negara blokir GeoIP           (contoh: US,RU)",
-    "  UPSTASH_REDIS_REST_URL   -> Upstash Redis via Vercel Marketplace (secret -> dashboard)",
-    "  UPSTASH_REDIS_REST_TOKEN -> Upstash token                        (secret -> dashboard)",
-    "Catatan: @vercel/kv sudah deprecated; rate-limit cross-edge kini pakai @upstash/redis."
-  ]
+  }
 }
