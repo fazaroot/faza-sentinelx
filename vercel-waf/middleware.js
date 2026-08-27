@@ -91,13 +91,18 @@ export function matchRoute(path, routes) {
   return best === null ? null : { prefix: best, destination: routes[best] };
 }
 
-/** fetch ke host tujuan & kembalikan response-nya (reverse proxy) */
-async function proxyTo(req, destination, extra) {
+/** fetch ke host tujuan & kembalikan response-nya (reverse proxy).
+ *  Prefix di-strip (gateway style): /httpbin/get dgn prefix /httpbin -> host menerima /get.
+ *  Path di destination berfungsi sebagai base: https://host.com/base -> /base/get. */
+async function proxyTo(req, hit, extra) {
   const url = new URL(req.url);
-  const target = new URL(url.pathname + url.search, destination);
+  const dest = new URL(hit.destination);
+  const stripped = (url.pathname.slice(hit.prefix.length)) || "/";
+  const basePath = dest.pathname.replace(/\/+$/, "");
+  const target = new URL(basePath + stripped + url.search, dest.origin);
   const headers = new Headers(req.headers);
   if (extra) for (const [k, v] of extra) headers.set(k, v);
-  headers.set("host", target.host);
+  headers.set("host", dest.host);
   headers.set("x-forwarded-host", url.host);
   headers.set("x-forwarded-proto", "https");
   const isBody = req.method !== "GET" && req.method !== "HEAD";
@@ -108,7 +113,8 @@ async function proxyTo(req, destination, extra) {
     redirect: "manual",
   });
   const respHeaders = new Headers(upstream.headers);
-  respHeaders.set("x-sentinel-proxied", destination);
+  respHeaders.set("x-sentinel-proxied", hit.destination);
+  respHeaders.set("x-sentinel-rewrote", hit.prefix + " -> " + target.pathname);
   return new Response(upstream.body, { status: upstream.status, headers: respHeaders });
 }
 
@@ -235,7 +241,7 @@ export default async function middleware(req) {
     if (hit) {
       extra.set("x-sentinel-route", hit.prefix);
       try {
-        return await proxyTo(req, hit.destination, extra);
+        return await proxyTo(req, hit, extra);
       } catch (e) {
         return json({ error: "Bad Gateway", code: "WAF_PROXY_FAIL",
                       destination: hit.destination, detail: String((e && e.message) || e) }, 502);
