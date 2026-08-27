@@ -187,15 +187,6 @@ node self-test-features.mjs # PASS=11 (KV + whitelist + geoip)
 | Regex kompleks | hanya di tier eksternal (digate oleh skor > 0) |
 | C++ L3/4 | butuh root + NFQUEUE (tidak jalan di Android/UserLAnd) |
 
----
-
-## 🔑 Keamanan & Token
-
-**PERINGATAN**: Token GitHub yang disertakan dalam sesi ini (`ghp_w2toMR...`)
-sudah terekspos. **Segera revoke & buat baru** di GitHub → Settings → Developer
-settings → Personal access tokens.
-
----
 
 ## 📄 Lisensi
 MIT — bebas dipakai, dimodifikasi, didistribusikan.
