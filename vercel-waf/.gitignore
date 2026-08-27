@@ -1,0 +1,9 @@
+# dependensi dev/build lokal
+node_modules/
+.vercel/
+.vercel_build_output/
+.env*
+npm-debug.log*
+*.log
+__pycache__/
+.DS_Store
